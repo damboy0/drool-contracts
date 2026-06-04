@@ -8,7 +8,20 @@ out = "out"
 solc_version = "0.8.30"
 src = "src"
 via_ir = false
+# Guide recommendations - added
+optimizer = true
+optimizer_runs = 200
 
-[lint]
+[profile.default.fuzz]
+runs = 256
+
+[rpc_endpoints]
+sepolia = "${SEPOLIA_RPC_URL}"
+mainnet = "${MAINNET_RPC_URL}"
+
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
+
+[profile.lint]
 exclude_lints = ["screaming-snake-case-immutable", "screaming-snake-case-const"]
 lint_on_build = false
