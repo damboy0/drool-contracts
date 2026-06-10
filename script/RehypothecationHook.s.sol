@@ -28,31 +28,26 @@ contract DeployRehypothecationHook is Script {
     using PoolIdLibrary for PoolKey;
 
     // ─── Hook permission flags (must match getHookPermissions()) ─────────
-    uint160 constant FLAGS =
-    uint160(Hooks.AFTER_INITIALIZE_FLAG)                    |
-    uint160(Hooks.AFTER_ADD_LIQUIDITY_FLAG)                 |
-    uint160(Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG)             |
-    uint160(Hooks.BEFORE_SWAP_FLAG)                         |
-    uint160(Hooks.AFTER_SWAP_FLAG)                          |
-    uint160(Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG)            |
-    uint160(Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG);
+    uint160 constant FLAGS = uint160(Hooks.AFTER_INITIALIZE_FLAG) | uint160(Hooks.AFTER_ADD_LIQUIDITY_FLAG)
+        | uint160(Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG) | uint160(Hooks.BEFORE_SWAP_FLAG) | uint160(Hooks.AFTER_SWAP_FLAG)
+        | uint160(Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG) | uint160(Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG);
 
     // ─── Deployment result (logged at end) ───────────────────────────────
     RehypothecationHook public hook;
-    PoolKey             public poolKey;
-    PoolId              public poolId;
+    PoolKey public poolKey;
+    PoolId public poolId;
 
     function run() external {
         // ── Load config from environment ─────────────────────────────────
-        uint256 deployerKey  = vm.envUint("PRIVATE_KEY");
-        address deployer     = vm.addr(deployerKey);
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(deployerKey);
 
         address poolManagerAddr = vm.envAddress("POOL_MANAGER_ADDRESS");
-        address aavePoolAddr    = vm.envAddress("AAVE_POOL_ADDRESS");
-        address token0Addr      = vm.envAddress("TOKEN0_ADDRESS"); // lower address
-        address token1Addr      = vm.envAddress("TOKEN1_ADDRESS"); // higher address
-        uint24  poolFee         = uint24(vm.envOr("POOL_FEE", uint256(3000))); // default 0.3%
-        int24   tickSpacing     = int24(int256(vm.envOr("TICK_SPACING", uint256(60))));
+        address aavePoolAddr = vm.envAddress("AAVE_POOL_ADDRESS");
+        address token0Addr = vm.envAddress("TOKEN0_ADDRESS"); // lower address
+        address token1Addr = vm.envAddress("TOKEN1_ADDRESS"); // higher address
+        uint24 poolFee = uint24(vm.envOr("POOL_FEE", uint256(3000))); // default 0.3%
+        int24 tickSpacing = int24(int256(vm.envOr("TICK_SPACING", uint256(60))));
 
         // Enforce token ordering (currency0 must be < currency1)
         if (token0Addr > token1Addr) {
@@ -72,14 +67,13 @@ contract DeployRehypothecationHook is Script {
 
         // ── Mine CREATE2 salt for correct hook address flags ─────────────
         //
-        
         address create2Factory = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
         console2.log("\nMining CREATE2 salt for hook address with flags:", FLAGS);
         console2.log("CREATE2 factory:", create2Factory);
 
         (address hookAddress, bytes32 salt) = HookMiner.find(
-            create2Factory,   
+            create2Factory,
             FLAGS,
             type(RehypothecationHook).creationCode,
             abi.encode(poolManagerAddr, aavePoolAddr, deployer)
@@ -91,11 +85,7 @@ contract DeployRehypothecationHook is Script {
         // ── Deploy ───────────────────────────────────────────────────────
         vm.startBroadcast(deployerKey);
 
-        hook = new RehypothecationHook{salt: salt}(
-            IPoolManager(poolManagerAddr),
-            IPool(aavePoolAddr),
-            deployer
-        );
+        hook = new RehypothecationHook{salt: salt}(IPoolManager(poolManagerAddr), IPool(aavePoolAddr), deployer);
 
         require(address(hook) == hookAddress, "Hook address mismatch  salt mining failed");
         console2.log("\nHook deployed at:", address(hook));
@@ -106,11 +96,11 @@ contract DeployRehypothecationHook is Script {
 
         // ── Configure pool key ───────────────────────────────────────────
         poolKey = PoolKey({
-            currency0:   Currency.wrap(token0Addr),
-            currency1:   Currency.wrap(token1Addr),
-            fee:         poolFee,
+            currency0: Currency.wrap(token0Addr),
+            currency1: Currency.wrap(token1Addr),
+            fee: poolFee,
             tickSpacing: tickSpacing,
-            hooks:       IHooks(address(hook))
+            hooks: IHooks(address(hook))
         });
         poolId = poolKey.toId();
 

@@ -28,10 +28,10 @@ contract RehypothecationHook is BaseHook, ReentrancyGuard, Ownable {
     IPool public immutable aavePool;
 
     struct PoolConfig {
-        address aToken;          // Aave aToken for the pool asset
-        address underlying;      // The actual ERC20 token
-        uint256 deployedToAave;  // Amount currently in Aave (in underlying units)
-        bool isToken0;           // Which token of the pair goes to Aave
+        address aToken; // Aave aToken for the pool asset
+        address underlying; // The actual ERC20 token
+        uint256 deployedToAave; // Amount currently in Aave (in underlying units)
+        bool isToken0; // Which token of the pair goes to Aave
         bool initialized;
     }
 
@@ -49,11 +49,7 @@ contract RehypothecationHook is BaseHook, ReentrancyGuard, Ownable {
     event AaveWithdrawn(PoolId indexed poolId, uint256 amount, string reason);
     event PoolConfigSet(PoolId indexed poolId, address aToken, address underlying);
 
-    constructor(
-        IPoolManager _manager,
-        IPool _aavePool,
-        address _owner
-    ) BaseHook(_manager) Ownable(_owner) {
+    constructor(IPoolManager _manager, IPool _aavePool, address _owner) BaseHook(_manager) Ownable(_owner) {
         aavePool = _aavePool;
     }
 
@@ -79,12 +75,7 @@ contract RehypothecationHook is BaseHook, ReentrancyGuard, Ownable {
 
     // ─── Hook Callbacks ────────────────────────────────────────────────────
 
-    function _afterInitialize(
-        address,
-        PoolKey calldata key,
-        uint160,
-        int24
-    ) internal override returns (bytes4) {
+    function _afterInitialize(address, PoolKey calldata key, uint160, int24) internal override returns (bytes4) {
         address token0 = Currency.unwrap(key.currency0);
         PoolId poolId = key.toId();
 
@@ -109,7 +100,6 @@ contract RehypothecationHook is BaseHook, ReentrancyGuard, Ownable {
         PoolId poolId = key.toId();
         PoolConfig storage config = poolConfigs[poolId];
         if (!config.initialized) revert PoolNotInitialized();
-
 
         // Use delta directly — negative means tokens flowed INTO the pool
         int128 amount = config.isToken0 ? delta.amount0() : delta.amount1();
@@ -144,40 +134,34 @@ contract RehypothecationHook is BaseHook, ReentrancyGuard, Ownable {
 
         uint256 neededAmount = _estimateWithdrawNeeded(key, params, config);
         if (neededAmount > 0 && config.deployedToAave > 0 && config.aToken != address(0)) {
-            uint256 toWithdraw = neededAmount > config.deployedToAave
-                ? config.deployedToAave
-                : neededAmount;
+            uint256 toWithdraw = neededAmount > config.deployedToAave ? config.deployedToAave : neededAmount;
             _withdrawFromAave(poolId, config, toWithdraw, "beforeRemoveLiquidity");
-             _returnToPoolManager(config.underlying, toWithdraw); 
+            _returnToPoolManager(config.underlying, toWithdraw);
         }
 
         return BaseHook.beforeRemoveLiquidity.selector;
     }
 
-    function _beforeSwap(
-        address,
-        PoolKey calldata key,
-        SwapParams calldata params,
-        bytes calldata
-    ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
+    function _beforeSwap(address, PoolKey calldata key, SwapParams calldata params, bytes calldata)
+        internal
+        override
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
         if (paused) revert HookPaused();
 
         PoolId poolId = key.toId();
         PoolConfig storage config = poolConfigs[poolId];
 
-            if (config.deployedToAave > 0 && config.aToken != address(0)) {
+        if (config.deployedToAave > 0 && config.aToken != address(0)) {
             Currency currency = config.isToken0 ? key.currency0 : key.currency1;
             uint256 poolReserve = currency.balanceOf(address(poolManager));
 
-            uint256 swapAmount = params.amountSpecified < 0
-                ? uint256(-params.amountSpecified)
-                : uint256(params.amountSpecified);
+            uint256 swapAmount =
+                params.amountSpecified < 0 ? uint256(-params.amountSpecified) : uint256(params.amountSpecified);
 
             if (poolReserve < (swapAmount * 150) / 100) {
                 uint256 deficit = (swapAmount * 150) / 100 - poolReserve;
-                uint256 toWithdraw = deficit > config.deployedToAave
-                    ? config.deployedToAave
-                    : deficit;
+                uint256 toWithdraw = deficit > config.deployedToAave ? config.deployedToAave : deficit;
                 _withdrawFromAave(poolId, config, toWithdraw, "beforeSwap");
                 _returnToPoolManager(config.underlying, toWithdraw);
             }
@@ -186,13 +170,11 @@ contract RehypothecationHook is BaseHook, ReentrancyGuard, Ownable {
         return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     }
 
-    function _afterSwap(
-        address,
-        PoolKey calldata key,
-        SwapParams calldata,
-        BalanceDelta delta,
-        bytes calldata
-    ) internal override returns (bytes4, int128) {
+    function _afterSwap(address, PoolKey calldata key, SwapParams calldata, BalanceDelta delta, bytes calldata)
+        internal
+        override
+        returns (bytes4, int128)
+    {
         if (paused) revert HookPaused();
         return (BaseHook.afterSwap.selector, 0);
         // if (paused) revert HookPaused();
@@ -222,56 +204,42 @@ contract RehypothecationHook is BaseHook, ReentrancyGuard, Ownable {
 
     // ─── Internal Helpers ──────────────────────────────────────────────────
 
-    function _depositToAave(
-        PoolId poolId,
-        PoolConfig storage config,
-        uint256 amount
-    ) internal returns (uint256) {
-
-         poolManager.take(Currency.wrap(config.underlying), address(this), amount);
+    function _depositToAave(PoolId poolId, PoolConfig storage config, uint256 amount) internal returns (uint256) {
+        poolManager.take(Currency.wrap(config.underlying), address(this), amount);
         // Approve and deposit to Aave
         IERC20(config.underlying).approve(address(aavePool), amount);
-        
-         // AFTER
+
+        // AFTER
         try aavePool.supply(config.underlying, amount, address(this), 0) {
             config.deployedToAave += amount;
             emit AaveDeposited(poolId, amount);
-            return amount;  // ← signals to caller how much was consumed
+            return amount; // ← signals to caller how much was consumed
         } catch {
             IERC20(config.underlying).approve(address(aavePool), 0);
             IERC20(config.underlying).transfer(address(poolManager), amount);
             poolManager.sync(Currency.wrap(config.underlying));
             poolManager.settle();
-            return 0;  // ← nothing was consumed, PoolManager made whole
+            return 0; // ← nothing was consumed, PoolManager made whole
         }
     }
 
-    function _withdrawFromAave(
-        PoolId poolId,
-        PoolConfig storage config,
-        uint256 amount,
-        string memory reason
-    ) internal {
+    function _withdrawFromAave(PoolId poolId, PoolConfig storage config, uint256 amount, string memory reason)
+        internal
+    {
         uint256 withdrawn = aavePool.withdraw(config.underlying, amount, address(this));
         if (withdrawn == 0) revert AaveWithdrawFailed();
 
-
-        config.deployedToAave = config.deployedToAave > withdrawn
-            ? config.deployedToAave - withdrawn
-            : 0;
+        config.deployedToAave = config.deployedToAave > withdrawn ? config.deployedToAave - withdrawn : 0;
         emit AaveWithdrawn(poolId, withdrawn, reason);
     }
 
-    function _returnToPoolManager(
-        address underlying, 
-        uint256 amount
-        ) internal {
+    function _returnToPoolManager(address underlying, uint256 amount) internal {
         IERC20(underlying).transfer(address(poolManager), amount);
         poolManager.sync(Currency.wrap(underlying));
         poolManager.settle();
     }
 
-    // 
+    //
     // function _computeIdleAmount(
     //     PoolKey calldata key,
     //     PoolConfig storage config
@@ -295,22 +263,17 @@ contract RehypothecationHook is BaseHook, ReentrancyGuard, Ownable {
     //     }
     // }
 
-    function _estimateWithdrawNeeded(
-        PoolKey calldata,
-        ModifyLiquidityParams calldata,
-        PoolConfig storage config
-    ) internal view returns (uint256) {
+    function _estimateWithdrawNeeded(PoolKey calldata, ModifyLiquidityParams calldata, PoolConfig storage config)
+        internal
+        view
+        returns (uint256)
+    {
         return config.deployedToAave / 10;
     }
 
     // ─── Admin ─────────────────────────────────────────────────────────────
 
-    function setPoolConfig(
-        PoolId poolId,
-        address aToken,
-        address underlying,
-        bool isToken0
-    ) external onlyOwner {
+    function setPoolConfig(PoolId poolId, address aToken, address underlying, bool isToken0) external onlyOwner {
         poolConfigs[poolId].aToken = aToken;
         poolConfigs[poolId].underlying = underlying;
         poolConfigs[poolId].isToken0 = isToken0;

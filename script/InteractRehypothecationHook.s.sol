@@ -23,16 +23,31 @@ contract OnchainRouter is IUnlockCallback {
 
     IPoolManager public immutable manager;
 
-    uint8 constant ACTION_INITIALIZE       = 0;
-    uint8 constant ACTION_ADD_LIQUIDITY    = 1;
+    uint8 constant ACTION_INITIALIZE = 0;
+    uint8 constant ACTION_ADD_LIQUIDITY = 1;
     uint8 constant ACTION_REMOVE_LIQUIDITY = 2;
-    uint8 constant ACTION_SWAP             = 3;
+    uint8 constant ACTION_SWAP = 3;
 
-    struct InitParams     { PoolKey key; uint160 sqrtPriceX96; }
-    struct LiquidityParams{ PoolKey key; ModifyLiquidityParams params; address payer; }
-    struct SwapCallParams { PoolKey key; SwapParams params; address payer; }
+    struct InitParams {
+        PoolKey key;
+        uint160 sqrtPriceX96;
+    }
 
-    constructor(IPoolManager _manager) { manager = _manager; }
+    struct LiquidityParams {
+        PoolKey key;
+        ModifyLiquidityParams params;
+        address payer;
+    }
+
+    struct SwapCallParams {
+        PoolKey key;
+        SwapParams params;
+        address payer;
+    }
+
+    constructor(IPoolManager _manager) {
+        manager = _manager;
+    }
 
     function initialize(PoolKey memory key, uint160 sqrtPriceX96) external {
         manager.unlock(abi.encode(ACTION_INITIALIZE, abi.encode(InitParams(key, sqrtPriceX96))));
@@ -53,12 +68,10 @@ contract OnchainRouter is IUnlockCallback {
         if (action == ACTION_INITIALIZE) {
             InitParams memory p = abi.decode(payload, (InitParams));
             manager.initialize(p.key, p.sqrtPriceX96);
-
         } else if (action == ACTION_ADD_LIQUIDITY || action == ACTION_REMOVE_LIQUIDITY) {
             LiquidityParams memory p = abi.decode(payload, (LiquidityParams));
             (BalanceDelta delta,) = manager.modifyLiquidity(p.key, p.params, new bytes(0));
             _settle(p.key, delta, p.payer);
-
         } else if (action == ACTION_SWAP) {
             SwapCallParams memory p = abi.decode(payload, (SwapCallParams));
             BalanceDelta delta = manager.swap(p.key, p.params, new bytes(0));
@@ -87,43 +100,43 @@ contract InteractRehypothecationHook is Script {
 
     // ── Sepolia addresses ────────────────────────────────────────────────
     address constant POOL_MANAGER = 0x8C4BcBE6b9eF47855f97E675296FA3F6fafa5F1A;
-    address constant AAVE_POOL    = 0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951;
-    address constant LINK         = 0xf8Fb3713D459D7C1018BD0A49D19b4C44290EBE5;
-    address constant WETH         = 0xC558DBdd856501FCd9aaF1E62eae57A9F0629a3c;
-    address constant aLINK        = 0x3FfAf50D4F4E96eB78f2407c090b72e86eCaed24;
+    address constant AAVE_POOL = 0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951;
+    address constant LINK = 0xf8Fb3713D459D7C1018BD0A49D19b4C44290EBE5;
+    address constant WETH = 0xC558DBdd856501FCd9aaF1E62eae57A9F0629a3c;
+    address constant aLINK = 0x3FfAf50D4F4E96eB78f2407c090b72e86eCaed24;
     address constant aWETH = 0x5b071b590a59395fE4025A0Ccc1FcC931AAc1830;
 
     // Ensure token0 < token1
     address constant TOKEN0 = LINK < WETH ? LINK : WETH;
     address constant TOKEN1 = LINK < WETH ? WETH : LINK;
 
-    RehypothecationHook hook      = RehypothecationHook(HOOK);
-    IPoolManager        pm        = IPoolManager(POOL_MANAGER);
-    OnchainRouter       router;
+    RehypothecationHook hook = RehypothecationHook(HOOK);
+    IPoolManager pm = IPoolManager(POOL_MANAGER);
+    OnchainRouter router;
 
     PoolKey poolKey;
-    PoolId  poolId;
+    PoolId poolId;
 
     // ── Amounts ──────────────────────────────────────────────────────────
-    uint256 constant LIQUIDITY_AMOUNT  = 1_000e18;   // 1000 USDC  (6 decimals)
-    uint256 constant SWAP_AMOUNT       = 1000;     // 100  USDC
-    int256  constant LIQUIDITY_DELTA   = 1e18;      // liquidity units (not token amount)
+    uint256 constant LIQUIDITY_AMOUNT = 1_000e18; // 1000 USDC  (6 decimals)
+    uint256 constant SWAP_AMOUNT = 1000; // 100  USDC
+    int256 constant LIQUIDITY_DELTA = 1e18; // liquidity units (not token amount)
 
     // ─────────────────────────────────────────────────────────────────────
     // STEP SELECTOR — set via env: STEP=1|2|3|4|all
     // ─────────────────────────────────────────────────────────────────────
 
     function run() external {
-        uint256 pk      = vm.envUint("PRIVATE_KEY");
+        uint256 pk = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(pk);
         string memory step = vm.envOr("STEP", string("all"));
 
         poolKey = PoolKey({
-            currency0:   Currency.wrap(TOKEN0),
-            currency1:   Currency.wrap(TOKEN1),
-            fee:         3000,
+            currency0: Currency.wrap(TOKEN0),
+            currency1: Currency.wrap(TOKEN1),
+            fee: 3000,
             tickSpacing: 60,
-            hooks:       IHooks(HOOK)
+            hooks: IHooks(HOOK)
         });
         poolId = poolKey.toId();
 
@@ -159,8 +172,8 @@ contract InteractRehypothecationHook is Script {
         console2.log("  paused :", hook.paused());
         console2.log("  aavePool:", address(hook.aavePool()));
 
-        (address aToken, address underlying, uint256 deployed, bool isToken0, bool initialized)
-            = hook.poolConfigs(poolId);
+        (address aToken, address underlying, uint256 deployed, bool isToken0, bool initialized) =
+            hook.poolConfigs(poolId);
         console2.log("[Before] Pool config:");
         console2.log("  initialized :", initialized);
         console2.log("  aToken      :", aToken);
@@ -184,11 +197,11 @@ contract InteractRehypothecationHook is Script {
         console2.log("  isToken0    :", isToken0);
 
         // ── Assertions ────────────────────────────────────────────────
-        require(initialized,              "FAIL: pool not initialized");
-        require(aToken == aWETH,          "FAIL: aToken mismatch");
-        require(underlying == TOKEN0,     "FAIL: underlying mismatch");
-        require(isToken0 == true,         "FAIL: isToken0 mismatch");
-        require(!hook.paused(),           "FAIL: hook should not be paused");
+        require(initialized, "FAIL: pool not initialized");
+        require(aToken == aWETH, "FAIL: aToken mismatch");
+        require(underlying == TOKEN0, "FAIL: underlying mismatch");
+        require(isToken0 == true, "FAIL: isToken0 mismatch");
+        require(!hook.paused(), "FAIL: hook should not be paused");
         require(hook.owner() == deployer, "FAIL: owner mismatch");
 
         console2.log("STEP 1 PASSED: config verified on-chain");
@@ -210,8 +223,7 @@ contract InteractRehypothecationHook is Script {
         console2.log("[Before] Deployer token0 balance:", t0Before);
         console2.log("[Before] Deployer token1 balance:", t1Before);
         console2.log("[Before] Hook aUSDC balance (Aave):", aaveBalBefore);
-        console2.log("[Before] deployedToAave:",
-            _getDeployedToAave());
+        console2.log("[Before] deployedToAave:", _getDeployedToAave());
 
         vm.startBroadcast(pk);
 
@@ -220,20 +232,16 @@ contract InteractRehypothecationHook is Script {
         IERC20(TOKEN1).approve(address(router), type(uint256).max);
 
         // Add liquidity
-        ModifyLiquidityParams memory params = ModifyLiquidityParams({
-            tickLower:      -600,
-            tickUpper:      600,
-            liquidityDelta: LIQUIDITY_DELTA,
-            salt:           bytes32(0)
-        });
+        ModifyLiquidityParams memory params =
+            ModifyLiquidityParams({tickLower: -600, tickUpper: 600, liquidityDelta: LIQUIDITY_DELTA, salt: bytes32(0)});
         router.modifyLiquidity(poolKey, params, deployer);
 
         vm.stopBroadcast();
 
         // ── Balances after ────────────────────────────────────────────
-        uint256 t0After  = IERC20(TOKEN0).balanceOf(deployer);
-        uint256 t1After  = IERC20(TOKEN1).balanceOf(deployer);
-        uint256 aaveBalAfter  = IERC20(aWETH).balanceOf(HOOK);
+        uint256 t0After = IERC20(TOKEN0).balanceOf(deployer);
+        uint256 t1After = IERC20(TOKEN1).balanceOf(deployer);
+        uint256 aaveBalAfter = IERC20(aWETH).balanceOf(HOOK);
         uint256 deployedAfter = _getDeployedToAave();
 
         console2.log("[After] Deployer token0 balance:", t0After);
@@ -279,16 +287,16 @@ contract InteractRehypothecationHook is Script {
 
         // Swap token0 → token1
         SwapParams memory params = SwapParams({
-            zeroForOne:        true,
-            amountSpecified:   -int256(SWAP_AMOUNT),
+            zeroForOne: true,
+            amountSpecified: -int256(SWAP_AMOUNT),
             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
         });
         router.swap(poolKey, params, deployer);
 
         vm.stopBroadcast();
 
-        uint256 t0After  = IERC20(TOKEN0).balanceOf(deployer);
-        uint256 t1After  = IERC20(TOKEN1).balanceOf(deployer);
+        uint256 t0After = IERC20(TOKEN0).balanceOf(deployer);
+        uint256 t1After = IERC20(TOKEN1).balanceOf(deployer);
         uint256 deployedAfter = _getDeployedToAave();
 
         console2.log("[After Swap] token0:", t0After);
@@ -325,12 +333,8 @@ contract InteractRehypothecationHook is Script {
 
         // ── 4b: Verify operations revert while paused ─────────────────
         console2.log("[4b] Verifying add liquidity reverts while paused...");
-        ModifyLiquidityParams memory liqParams = ModifyLiquidityParams({
-            tickLower:      -600,
-            tickUpper:      600,
-            liquidityDelta: 1e14,
-            salt:           bytes32(0)
-        });
+        ModifyLiquidityParams memory liqParams =
+            ModifyLiquidityParams({tickLower: -600, tickUpper: 600, liquidityDelta: 1e14, salt: bytes32(0)});
         try router.modifyLiquidity(poolKey, liqParams, deployer) {
             console2.log("WARNING: Expected revert but call succeeded");
         } catch {
@@ -338,11 +342,8 @@ contract InteractRehypothecationHook is Script {
         }
 
         console2.log("[4b] Verifying swap reverts while paused...");
-        SwapParams memory swapParams = SwapParams({
-            zeroForOne:        true,
-            amountSpecified:   -1e6,
-            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
-        });
+        SwapParams memory swapParams =
+            SwapParams({zeroForOne: true, amountSpecified: -1e6, sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1});
         try router.swap(poolKey, swapParams, deployer) {
             console2.log("WARNING: Expected revert but call succeeded");
         } catch {
@@ -380,8 +381,8 @@ contract InteractRehypothecationHook is Script {
         // ── 4e: Verify operations work again ──────────────────────────
         console2.log("[4e] Verifying swap works after unpause...");
         SwapParams memory smallSwap = SwapParams({
-            zeroForOne:        true,
-            amountSpecified:   -100,          // ← tiny amount
+            zeroForOne: true,
+            amountSpecified: -100, // ← tiny amount
             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
         });
         vm.startBroadcast(pk);
@@ -396,8 +397,8 @@ contract InteractRehypothecationHook is Script {
 
         // ── Final state summary ───────────────────────────────────────
         console2.log("=== Final On-chain State ===");
-        (address aToken, address underlying, uint256 deployed, bool isToken0, bool initialized)
-            = hook.poolConfigs(poolId);
+        (address aToken, address underlying, uint256 deployed, bool isToken0, bool initialized) =
+            hook.poolConfigs(poolId);
         console2.log("initialized  :", initialized);
         console2.log("aToken       :", aToken);
         console2.log("underlying   :", underlying);
@@ -410,7 +411,7 @@ contract InteractRehypothecationHook is Script {
     // ─── Helpers ──────────────────────────────────────────────────────────
 
     function _getDeployedToAave() internal view returns (uint256) {
-        (, , uint256 deployed, ,) = hook.poolConfigs(poolId);
+        (,, uint256 deployed,,) = hook.poolConfigs(poolId);
         return deployed;
     }
 
