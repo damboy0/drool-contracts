@@ -388,7 +388,6 @@ These are known gaps relative to the full PRD, deferred for post-hackathon:
 
 ## Frontend Integration
 
-The frontend lives at [`damboy0/drool-FE`](https://github.com/damboy0/drool-FE).
 
 Quick setup:
 
